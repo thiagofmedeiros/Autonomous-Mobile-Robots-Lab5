@@ -5,7 +5,7 @@ import math
 
 WHEEL_DIST = 1.05
 WHEEL_DIAMETER = 1.6
-MAX_PHI = 3.2
+MAX_PHI = 2.5
 MAX_SIMULATION_TIME = 30 * 1000
 MAX_MEASURED_DISTANCE = 1.27
 ACCEPTED_ERROR = 0.001
@@ -17,90 +17,30 @@ BLUE = [0, 0, 1]
 YELLOW = [1, 1, 0]
 
 yellow_x = -20
-yellow_Y = 20
+yellow_y = 20
 
 red_x = 20
-red_Y = 20
+red_y = 20
 
 green_x = -20
-green_Y = -20
+green_y = -20
 
 blue_x = 20
-blue_Y = -20
+blue_y = -20
 
 cylinder_radius = 3.14
 
 
-def getA(x1, x2):
-    return -2 * x1 + 2 * x2
-
-
-def getB(y1, y2):
-    return -2 * y1 + 2 * y2
-
-
-def getC(r1, r2, x1, x2, y1, y2):
-    r1 = r1 ** 2
-    r2 = r2 ** 2
-    x1 = x1 ** 2
-    x2 = x2 ** 2
-    y1 = y1 ** 2
-    y2 = y2 ** 2
-
-    return r1 - r2 - x1 + x2 - y1 + y2
-
-
-def getD(x2, x3):
-    return -2 * x2 + 2 * x3
-
-
-def getE(y2, y3):
-    return -2 * y2 + 2 * y3
-
-
-def getF(r2, r3, x2, x3, y2, y3):
-    r2 = r2 ** 2
-    r3 = r3 ** 2
-    x2 = x2 ** 2
-    x3 = x3 ** 2
-    y2 = y2 ** 2
-    y3 = y3 ** 2
-
-    return r2 - r3 - x2 + x3 - y2 + y3
-
-
-def getXY(x1, x2, x3, y1, y2, y3, r1, r2, r3):
-    A = getA(x1, x2)
-    B = getB(y1, y2)
-    C = getC(r1, r2, x1, x2, y1, y2)
-    D = getD(x2, x3)
-    E = getE(y2, y3)
-    F = getF(r2, r3, x2, x3, y2, y3)
-
-    x = getX(A, B, C, D, E, F)
-    y = getY(A, B, C, D, E, F)
-
+def getXY(x1, y1, r1, x2, y2, r2, x3, y3, r3):
+    A = 2 * x2 - 2 * x1
+    B = 2 * y2 - 2 * y1
+    C = r1 ** 2 - r2 ** 2 - x1 ** 2 + x2 ** 2 - y1 ** 2 + y2 ** 2
+    D = 2 * x3 - 2 * x2
+    E = 2 * y3 - 2 * y2
+    F = r2 ** 2 - r3 ** 2 - x2 ** 2 + x3 ** 2 - y2 ** 2 + y3 ** 2
+    x = (C * E - F * B) / (E * A - B * D)
+    y = (C * D - A * F) / (B * D - A * E)
     return x, y
-
-
-def getX(A, B, C, D, E, F):
-    numerator = (C * E) - (F * B)
-
-    denominator = (E * A) - (B * D)
-
-    x = numerator / denominator
-
-    return x
-
-
-def getY(A, B, C, D, E, F):
-    numerator = (C * D) - (A * F)
-
-    denominator = (B * D) - (A * E)
-
-    y = numerator / denominator
-
-    return y
 
 
 # create the Robot instance.
@@ -169,93 +109,56 @@ def getSensors():
     ldsVal = metersToInches(leftDistanceSensor.getValue())
     rdsVal = metersToInches(rightDistanceSensor.getValue())
 
-    print("FrontDist {0:.3f} inches".format(fdsVal))
-    print("LeftDist {0:.3f} inches".format(ldsVal))
-    print("RightDist {0:.3f} inches\n".format(rdsVal))
-
     return fdsVal, ldsVal, rdsVal
 
 
 def setSpeedsRPS(rpsLeft, rpsRight):
     if rpsLeft > MAX_PHI:
-        print("Saturating left speed to {0:.3f} rad/s".format(MAX_PHI))
         leftMotor.setVelocity(MAX_PHI)
     elif rpsLeft < -MAX_PHI:
-        print("Saturating left speed to {0:.3f} rad/s".format(-MAX_PHI))
         leftMotor.setVelocity(-MAX_PHI)
     else:
-        print("Left motor velocity: {0:.3f} rad/s".format(rpsLeft))
         leftMotor.setVelocity(rpsLeft)
 
     if rpsRight > MAX_PHI:
-        print("Saturating right speed to {0:.3f} rad/s".format(MAX_PHI))
         rightMotor.setVelocity(MAX_PHI)
     elif rpsRight < -MAX_PHI:
-        print("Saturating right speed to {0:.3f} rad/s".format(-MAX_PHI))
         rightMotor.setVelocity(-MAX_PHI)
     else:
-        print("Right motor velocity: {0:.3f} rad/s\n".format(rpsRight))
         rightMotor.setVelocity(rpsRight)
 
 
-def rotateUntilObject(find, clockwise):
+def getCylinderPosition(color):
+    recognized_object_array = camera.getRecognitionObjects()
+
+    for cylinder in range(len(recognized_object_array)):
+        if recognized_object_array[cylinder].get_colors() == color:
+            position = recognized_object_array[cylinder].get_position_on_image()[0]
+            return position
+
+    return 0
+
+
+def getCylinderDirection(COLOR):
     global time
 
-    recognized_object_array = camera.getRecognitionObjects()
+    error = 45 - getCylinderPosition(COLOR)
 
-    if clockwise:
-        setSpeedsRPS(MAX_PHI, -MAX_PHI)
-    else:
-        setSpeedsRPS(-MAX_PHI, MAX_PHI)
+    while abs(error) > 1:
+        rps = K * error
+        setSpeedsRPS(-rps, rps)
 
-    if find:
-        while len(recognized_object_array) < 1:
-            robot.step(timestep)
-            time += timestep
+        robot.step(timestep)
+        time += timestep
 
-            recognized_object_array = camera.getRecognitionObjects()
-    else:
-        while len(recognized_object_array) > 0:
-            robot.step(timestep)
-            time += timestep
+        error = 45 - getCylinderPosition(COLOR)
 
-            recognized_object_array = camera.getRecognitionObjects()
-
-
-def getObjectDirection():
-    recognized_object_array = camera.getRecognitionObjects()
-
-    # If There is no object rotates until finds it
-    # then rotates until it is no longer on view
-    if len(recognized_object_array) < 1:
-        rotateUntilObject(find=True, clockwise=True)
-        firstYaw = getYawRadians()
-
-        rotateUntilObject(find=False, clockwise=True)
-        secondYaw = getYawRadians()
-    # If There is an object rotates until it is no longer on view
-    # Rotates in the opposite direction until finds it again
-    # than rotates until it is no longer on view again
-    else:
-        rotateUntilObject(find=False, clockwise=True)
-        firstYaw = getYawRadians()
-
-        rotateUntilObject(find=True, clockwise=False)
-
-        rotateUntilObject(find=False, clockwise=False)
-        secondYaw = getYawRadians()
-
-    # The direction of the object is the average between both angles
-    direction = (firstYaw + secondYaw) / 2
-
-    return direction
+    return getYawRadians()
 
 
 def correctDirection(desiredDirection):
     global time
     error = getYawRadians() - desiredDirection
-
-    print("\nCorrecting Direction\n")
 
     while abs(error) > ACCEPTED_ERROR:
         speed = K * error
@@ -265,8 +168,6 @@ def correctDirection(desiredDirection):
         time += timestep
 
         error = getYawRadians() - desiredDirection
-
-    print("\nDirection Corrected\n")
 
 
 def isCylinderColor(color):
@@ -279,13 +180,62 @@ def isCylinderColor(color):
     return False
 
 
+def getCell(x, y):
+    if y >= 10:
+        if x <= -10:
+            return 1
+        elif -10 < x <= 0:
+            return 2
+        elif 0 < x <= 10:
+            return 3
+        elif 10 < x:
+            return 4
+    elif 10 > y >= 0:
+        if x <= -10:
+            return 5
+        elif -10 < x <= 0:
+            return 6
+        elif 0 < x <= 10:
+            return 7
+        elif 10 < x:
+            return 8
+    elif 0 > y >= -10:
+        if x <= -10:
+            return 9
+        elif -10 < x <= 0:
+            return 10
+        elif 0 < x <= 10:
+            return 11
+        elif 10 < x:
+            return 12
+    elif -10 > y:
+        if x <= -10:
+            return 13
+        elif -10 < x <= 0:
+            return 14
+        elif 0 < x <= 10:
+            return 15
+        elif 10 < x:
+            return 16
+
+    return -1
+
+
 # First step to get sensor readings
 robot.step(timestep)
 time += timestep
 
-yellow = isCylinderColor(YELLOW)
-red = isCylinderColor(RED)
-blue = isCylinderColor(BLUE)
-green = isCylinderColor(GREEN)
+redDir = getCylinderDirection(RED)
+redDis = getSensors()[0] + cylinder_radius
 
-dire = getObjectDirection()
+yellowDir = getCylinderDirection(YELLOW)
+yellowDis = getSensors()[0] + cylinder_radius
+
+greenDir = getCylinderDirection(GREEN)
+greenDis = getSensors()[0] + cylinder_radius
+
+x, y = getXY(yellow_x, yellow_y, yellowDis, red_x, red_y, redDis, green_x, green_y, greenDis)
+
+cell = getCell(x, y)
+
+time += timestep
