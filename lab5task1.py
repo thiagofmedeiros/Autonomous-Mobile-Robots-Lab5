@@ -180,7 +180,7 @@ def isCylinderColor(color):
     return False
 
 
-def getCell(x, y):
+def getCellEstimation(x, y):
     if y >= 10:
         if x <= -10:
             return 1
@@ -221,21 +221,167 @@ def getCell(x, y):
     return -1
 
 
+def getCylindersDistances():
+    redDir = getCylinderDirection(RED)
+    redDis = getSensors()[0] + cylinder_radius
+
+    yellowDir = getCylinderDirection(YELLOW)
+    yellowDis = getSensors()[0] + cylinder_radius
+
+    greenDir = getCylinderDirection(GREEN)
+    greenDis = getSensors()[0] + cylinder_radius
+
+    blueDir = getCylinderDirection(BLUE)
+    blueDis = getSensors()[0] + cylinder_radius
+
+    return redDis, yellowDis, greenDis, blueDis
+
+
+def getPosition():
+    redDis, yellowDis, greenDis, blueDis = getCylindersDistances()
+
+    x, y = getXY(red_x, red_y, redDis, green_x, green_y, greenDis, blue_x, blue_y, blueDis)
+
+    cell = getCellEstimation(x, y)
+
+    return cell, x, y
+
+
+def printData(cell, x, y, yaw):
+    print("Cell {0}".format(cell))
+    print("Position: ({0:.2f}, {1:.2f}) Yaw: {2:.2f})".format(x, y, yaw))
+
+
+def correctDistance(desiredDistance):
+    global time
+    error = getSensors()[0] - desiredDistance
+
+    while abs(error) > ACCEPTED_ERROR:
+        speed = K * error
+
+        setSpeedsRPS(speed, speed)
+        robot.step(timestep)
+        time += timestep
+
+        error = getSensors()[0] - desiredDistance
+
+
+def isAllCellsCovered(cells):
+    for i in cells:
+        if i == False:
+            return i
+    return True
+
+
 # First step to get sensor readings
 robot.step(timestep)
 time += timestep
 
-redDir = getCylinderDirection(RED)
-redDis = getSensors()[0] + cylinder_radius
+NORTH = math.pi / 2
+SOUTH = -math.pi / 2
+WEST = math.pi
+EAST = 0
 
-yellowDir = getCylinderDirection(YELLOW)
-yellowDis = getSensors()[0] + cylinder_radius
+V = MAX_PHI * WHEEL_DIAMETER / 2
 
-greenDir = getCylinderDirection(GREEN)
-greenDis = getSensors()[0] + cylinder_radius
+cells = [False] * 16
 
-x, y = getXY(yellow_x, yellow_y, yellowDis, red_x, red_y, redDis, green_x, green_y, greenDis)
+cell, x, y = getPosition()
 
-cell = getCell(x, y)
+cells[cell - 1] = True
 
-time += timestep
+hasHitEastWall = False
+sweepDirection = EAST
+travelDirection = NORTH
+
+correctDirection(travelDirection)
+yaw = getYawRadians()
+printData(cell, x, y, yaw)
+
+while not isAllCellsCovered(cells):
+
+    initTime = time
+
+    setSpeedsRPS(V, V)
+
+    while getSensors()[0] > 5:
+        robot.step(timestep)
+        time += timestep
+
+        y += V * timestep / 1000
+
+        distanceTraveled = (time - initTime) / 1000 * V
+
+        if distanceTraveled >= 10:
+            if travelDirection == NORTH:
+                cell -= 4
+            else:
+                cell += 4
+            cells[cell - 1] = True
+            initTime = time
+
+            yaw = getYawRadians()
+
+            printData(cell, x, y, yaw)
+
+    correctDistance(5)
+    y = 15
+
+    if hasHitEastWall:
+        sweepDirection = WEST
+
+    correctDirection(sweepDirection)
+    yaw = getYawRadians()
+
+    printData(cell, x, y, yaw)
+
+    setSpeedsRPS(V, V)
+
+    distanceTraveled = 0
+    initTime = time
+
+    while getSensors()[0] > 5 and distanceTraveled < 12:
+        robot.step(timestep)
+        time += timestep
+
+        x += V * timestep / 1000
+
+        distanceTraveled = (time - initTime) / 1000 * V
+
+    if distanceTraveled >= 12:
+        if not cell == 4 or not cell == 16:
+            if sweepDirection == EAST:
+                cell += 1
+            else:
+                cell -= 1
+    else:
+        correctDistance(5)
+
+        if not hasHitEastWall:
+            hasHitEastWall = True
+
+            if travelDirection == NORTH:
+                cell = 4
+            else:
+                cell = 16
+        else:
+            if travelDirection == NORTH:
+                cell = 1
+            else:
+                cell = 13
+
+    cells[cell - 1] = True
+
+    if travelDirection == NORTH:
+        x = 15
+        travelDirection = SOUTH
+    else:
+        x = -15
+        travelDirection = NORTH
+
+    correctDirection(travelDirection)
+    yaw = getYawRadians()
+
+    printData(cell, x, y, yaw)
+
+setSpeedsRPS(0, 0)
