@@ -310,88 +310,113 @@ def move(x, y, frontPrevious, direction):
 robot.step(timestep)
 time += timestep
 
+# defining direction
 NORTH = math.pi / 2
 SOUTH = -math.pi / 2
 WEST = math.pi
 EAST = 0
 
-V = MAX_PHI * WHEEL_DIAMETER / 2
+# speed in rps
+V = MAX_PHI
 
+# init cell matrix
 cells = [False] * 16
 
+# use trilateration to get position
 cell, x, y = getPosition()
 
+# mark cell as visited
 cells[cell - 1] = True
 
+# init direction
 hasReachedEastWall = False
 sweepDirection = EAST
 travelDirection = NORTH
-
 correctDirection(travelDirection)
-yaw = getYawRadians()
-printData(cell, x, y, yaw)
 
+# print first map and pose
+printData(cell, x, y, getYawRadians())
+
+# execute until map is covered or 3 minutes
 while not isAllCellsCovered(cells) and time < 3 * 60 * 1000:
 
     setSpeedsRPS(V, V)
 
     front = getSensors()[0]
 
-    while front > 3.5:
-        previousCell = cell
+    previousCell = cell
 
+    # navigate until north wall
+    while front > 3.5:
+        # move and update pose and cell
         cell, x, y = move(x, y, front, travelDirection)
 
         front = getSensors()[0]
 
+        # detect cell change
         if not cell == previousCell:
             previousCell = cell
+
+            # mark cell as visited
             cells[cell - 1] = True
+            # print map and pose
+            printData(cell, x, y, getYawRadians())
 
-            yaw = getYawRadians()
-            printData(cell, x, y, yaw)
+    # if not covered all map
+    if not isAllCellsCovered(cells):
+        # calibrate y position
+        correctDistance(3.5)
+        if travelDirection == NORTH:
+            y = 15
+        else:
+            y = -15
 
-    correctDistance(3.5)
-    if travelDirection == NORTH:
-        y = 15
-    else:
-        y = -15
+        # if already has navigated to the east, move to the west
+        if hasReachedEastWall:
+            sweepDirection = WEST
 
-    if hasReachedEastWall:
-        sweepDirection = WEST
+        correctDirection(sweepDirection)
 
-    correctDirection(sweepDirection)
+        setSpeedsRPS(V, V)
 
-    setSpeedsRPS(V, V)
-
-    frontPrevious = getSensors()[0]
-    front = frontPrevious
-    previousCell = cell
-
-    while front > 3.5 and previousCell == cell:
+        frontPrevious = getSensors()[0]
+        front = frontPrevious
         previousCell = cell
 
-        cell, x, y = move(x, y, front, sweepDirection)
+        # navigate until next cell or close to wall
+        while front > 3.5 and previousCell == cell:
+            # move and update pose and cell
+            cell, x, y = move(x, y, front, sweepDirection)
 
-        front = getSensors()[0]
+            front = getSensors()[0]
 
-    cells[cell - 1] = True
-    printData(cell, x, y, getYawRadians())
+        # detect cell change
+        if not previousCell == cell:
+            # mark cell as visited
+            cells[cell - 1] = True
+            # print map and pose
+            printData(cell, x, y, getYawRadians())
 
-    if cell == 4 or cell == 16:
-        hasReachedEastWall = True
+        # if not covered all map
+        if not isAllCellsCovered(cells):
+            # if encountered most eastern cells
+            # mark east wall as reached
+            if cell == 4 or cell == 16:
+                hasReachedEastWall = True
 
-        correctDistance(3.5)
-        if sweepDirection == EAST:
-            x = 15
-        else:
-            x = -15
+                # calibrate x
+                correctDistance(3.5)
+                if sweepDirection == EAST:
+                    x = 15
+                else:
+                    x = -15
 
-    if travelDirection == NORTH:
-        travelDirection = SOUTH
-    else:
-        travelDirection = NORTH
+            # change direction
+            if travelDirection == NORTH:
+                travelDirection = SOUTH
+            else:
+                travelDirection = NORTH
 
-    correctDirection(travelDirection)
+            correctDirection(travelDirection)
 
 setSpeedsRPS(0, 0)
