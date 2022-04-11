@@ -307,7 +307,7 @@ correctDirection(travelDirection)
 yaw = getYawRadians()
 printData(cell, x, y, yaw)
 
-while not isAllCellsCovered(cells):
+while not isAllCellsCovered(cells) and time < 3 * 60 * 1000:
 
     initTime = time
 
