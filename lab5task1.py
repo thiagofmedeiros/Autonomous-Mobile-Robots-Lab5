@@ -248,8 +248,17 @@ def getPosition():
 
 
 def printData(cell, x, y, yaw):
-    print("Cell {0}".format(cell))
-    print("Position: ({0:.2f}, {1:.2f}) Yaw: {2:.2f})".format(x, y, yaw))
+    global cells
+    # print("Cell {0}".format(cell))
+    # print("Position: ({0:.2f}, {1:.2f}) Yaw: {2:.2f})".format(x, y, yaw))
+    for i in range(16):
+        if cells[i]:
+            print("X", end="")
+        else:
+            print(".", end="")
+        if (i + 1) % 4 == 0 and not i == 0:
+            print("")
+    print("({0:.2f}, {1:.2f}, {2}, {3:.2f})".format(x, y, cell, yaw))
 
 
 def correctDistance(desiredDistance):
@@ -337,9 +346,6 @@ while not isAllCellsCovered(cells):
         sweepDirection = WEST
 
     correctDirection(sweepDirection)
-    yaw = getYawRadians()
-
-    printData(cell, x, y, yaw)
 
     setSpeedsRPS(V, V)
 
