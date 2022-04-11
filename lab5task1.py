@@ -3,11 +3,8 @@
 from controller import Robot, Camera, CameraRecognitionObject, InertialUnit, DistanceSensor, PositionSensor
 import math
 
-WHEEL_DIST = 1.05
-WHEEL_DIAMETER = 1.6
 MAX_PHI = 2.5
-MAX_SIMULATION_TIME = 30 * 1000
-MAX_MEASURED_DISTANCE = 1.27
+MAX_SIMULATION_TIME = 3 * 60 * 1000
 ACCEPTED_ERROR = 0.001
 K = 10
 
@@ -29,19 +26,6 @@ blue_x = 20
 blue_y = -20
 
 cylinder_radius = 3.14
-
-
-def getXY(x1, y1, r1, x2, y2, r2, x3, y3, r3):
-    A = 2 * x2 - 2 * x1
-    B = 2 * y2 - 2 * y1
-    C = r1 ** 2 - r2 ** 2 - x1 ** 2 + x2 ** 2 - y1 ** 2 + y2 ** 2
-    D = 2 * x3 - 2 * x2
-    E = 2 * y3 - 2 * y2
-    F = r2 ** 2 - r3 ** 2 - x2 ** 2 + x3 ** 2 - y2 ** 2 + y3 ** 2
-    x = (C * E - F * B) / (E * A - B * D)
-    y = (C * D - A * F) / (B * D - A * E)
-    return x, y
-
 
 # create the Robot instance.
 robot = Robot()
@@ -83,21 +67,8 @@ rightMotor.setVelocity(0)
 time = 0
 
 
-def inchesToMeters(x):
-    return x / 39.37
-
-
 def metersToInches(x):
     return x * 39.37
-
-
-def getYawDegrees():
-    Yaw = math.degrees(getYawRadians())
-
-    if Yaw < 0:
-        Yaw = Yaw + 360
-
-    return Yaw
 
 
 def getYawRadians():
@@ -128,6 +99,8 @@ def setSpeedsRPS(rpsLeft, rpsRight):
         rightMotor.setVelocity(rpsRight)
 
 
+# return position of cylinder with required color if it is on camera
+# return 0 otherwise
 def getCylinderPosition(color):
     recognized_object_array = camera.getRecognitionObjects()
 
@@ -139,11 +112,14 @@ def getCylinderPosition(color):
     return 0
 
 
+# centers cylinder of required color on camera and return its direction relative to robot
 def getCylinderDirection(COLOR):
     global time
 
+    # considers 45 as center of camera
     error = 45 - getCylinderPosition(COLOR)
 
+    # proportional control to center cylinder
     while abs(error) > 1:
         rps = K * error
         setSpeedsRPS(-rps, rps)
@@ -156,6 +132,7 @@ def getCylinderDirection(COLOR):
     return getYawRadians()
 
 
+# uses proportional control to move robot to a desired direction
 def correctDirection(desiredDirection):
     global time
     error = getYawRadians() - desiredDirection
@@ -170,6 +147,7 @@ def correctDirection(desiredDirection):
         error = getYawRadians() - desiredDirection
 
 
+# returns true of there is a cylinder of required color on camera
 def isCylinderColor(color):
     recognized_object_array = camera.getRecognitionObjects()
 
@@ -180,6 +158,20 @@ def isCylinderColor(color):
     return False
 
 
+# calculate x and y using trilateration
+def getXY(x1, y1, r1, x2, y2, r2, x3, y3, r3):
+    A = 2 * x2 - 2 * x1
+    B = 2 * y2 - 2 * y1
+    C = r1 ** 2 - r2 ** 2 - x1 ** 2 + x2 ** 2 - y1 ** 2 + y2 ** 2
+    D = 2 * x3 - 2 * x2
+    E = 2 * y3 - 2 * y2
+    F = r2 ** 2 - r3 ** 2 - x2 ** 2 + x3 ** 2 - y2 ** 2 + y3 ** 2
+    x = (C * E - F * B) / (E * A - B * D)
+    y = (C * D - A * F) / (B * D - A * E)
+    return x, y
+
+
+# estimates cell number from map using x and y received
 def getCellEstimation(x, y):
     if y >= 10:
         if x <= -10:
@@ -221,6 +213,10 @@ def getCellEstimation(x, y):
     return -1
 
 
+# return distances to the center of each cylinder
+# by moving robot in the direction of each color
+# measuring the distance using front sensor
+# adding cylinder radius
 def getCylindersDistances():
     redDir = getCylinderDirection(RED)
     redDis = getSensors()[0] + cylinder_radius
@@ -237,7 +233,8 @@ def getCylindersDistances():
     return redDis, yellowDis, greenDis, blueDis
 
 
-def getPosition():
+# returns pose
+def getPose():
     redDis, yellowDis, greenDis, blueDis = getCylindersDistances()
 
     x, y = getXY(red_x, red_y, redDis, green_x, green_y, greenDis, blue_x, blue_y, blueDis)
@@ -247,6 +244,7 @@ def getPosition():
     return cell, x, y
 
 
+# Print data from pose
 def printData(cell, x, y, yaw):
     global cells
     # print("Cell {0}".format(cell))
@@ -261,6 +259,7 @@ def printData(cell, x, y, yaw):
     print("({0:.2f}, {1:.2f}, {2}, {3:.2f})".format(x, y, cell, yaw))
 
 
+# uses proportional control to reach deasired distance
 def correctDistance(desiredDistance):
     global time
     error = getSensors()[0] - desiredDistance
@@ -275,6 +274,7 @@ def correctDistance(desiredDistance):
         error = getSensors()[0] - desiredDistance
 
 
+# verify if all cells have been marked as traversed
 def isAllCellsCovered(cells):
     for i in cells:
         if i == False:
@@ -282,8 +282,11 @@ def isAllCellsCovered(cells):
     return True
 
 
-def move(x, y, frontPrevious, direction):
+# moves robot, recalculating x, y and cell number
+def move(x, y, direction):
     global time
+
+    frontPrevious = getSensors()[0]
 
     robot.step(timestep)
     time += timestep
@@ -323,7 +326,7 @@ V = MAX_PHI
 cells = [False] * 16
 
 # use trilateration to get position
-cell, x, y = getPosition()
+cell, x, y = getPose()
 
 # mark cell as visited
 cells[cell - 1] = True
@@ -338,7 +341,7 @@ correctDirection(travelDirection)
 printData(cell, x, y, getYawRadians())
 
 # execute until map is covered or 3 minutes
-while not isAllCellsCovered(cells) and time < 3 * 60 * 1000:
+while not isAllCellsCovered(cells) and time < MAX_SIMULATION_TIME:
 
     setSpeedsRPS(V, V)
 
@@ -349,7 +352,7 @@ while not isAllCellsCovered(cells) and time < 3 * 60 * 1000:
     # navigate until north wall
     while front > 3.5:
         # move and update pose and cell
-        cell, x, y = move(x, y, front, travelDirection)
+        cell, x, y = move(x, y, travelDirection)
 
         front = getSensors()[0]
 
@@ -386,7 +389,7 @@ while not isAllCellsCovered(cells) and time < 3 * 60 * 1000:
         # navigate until next cell or close to wall
         while front > 3.5 and previousCell == cell:
             # move and update pose and cell
-            cell, x, y = move(x, y, front, sweepDirection)
+            cell, x, y = move(x, y, sweepDirection)
 
             front = getSensors()[0]
 
