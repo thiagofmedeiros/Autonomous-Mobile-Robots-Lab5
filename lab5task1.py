@@ -282,6 +282,30 @@ def isAllCellsCovered(cells):
     return True
 
 
+def move(x, y, frontPrevious, direction):
+    global time
+
+    robot.step(timestep)
+    time += timestep
+
+    front = getSensors()[0]
+
+    distance = abs(frontPrevious - front)
+
+    if direction == EAST:
+        x += distance
+    elif direction == WEST:
+        x -= distance
+    elif direction == NORTH:
+        y += distance
+    else:
+        y -= distance
+
+    cell = getCellEstimation(x, y)
+
+    return cell, x, y
+
+
 # First step to get sensor readings
 robot.step(timestep)
 time += timestep
@@ -299,7 +323,7 @@ cell, x, y = getPosition()
 
 cells[cell - 1] = True
 
-hasHitEastWall = False
+hasReachedEastWall = False
 sweepDirection = EAST
 travelDirection = NORTH
 
@@ -309,87 +333,59 @@ printData(cell, x, y, yaw)
 
 while not isAllCellsCovered(cells) and time < 3 * 60 * 1000:
 
-    initTime = time
-
     setSpeedsRPS(V, V)
 
-    while getSensors()[0] > 5:
-        robot.step(timestep)
-        time += timestep
+    front = getSensors()[0]
 
-        if travelDirection == NORTH:
-            y += V * timestep / 1000
-        else:
-            y -= V * timestep / 1000
+    while front > 3.5:
+        previousCell = cell
 
-        distanceTraveled = (time - initTime) / 1000 * V
+        cell, x, y = move(x, y, front, travelDirection)
 
-        if distanceTraveled >= 10:
-            if travelDirection == NORTH:
-                cell -= 4
-            else:
-                cell += 4
+        front = getSensors()[0]
+
+        if not cell == previousCell:
+            previousCell = cell
             cells[cell - 1] = True
-            initTime = time
 
             yaw = getYawRadians()
-
             printData(cell, x, y, yaw)
 
-    correctDistance(5)
+    correctDistance(3.5)
     if travelDirection == NORTH:
         y = 15
     else:
         y = -15
 
-    if hasHitEastWall:
+    if hasReachedEastWall:
         sweepDirection = WEST
 
     correctDirection(sweepDirection)
 
     setSpeedsRPS(V, V)
 
-    distanceTraveled = 0
-    initTime = time
+    frontPrevious = getSensors()[0]
+    front = frontPrevious
+    previousCell = cell
 
-    while getSensors()[0] > 5 and distanceTraveled < 12:
-        robot.step(timestep)
-        time += timestep
+    while front > 3.5 and previousCell == cell:
+        previousCell = cell
 
-        if sweepDirection == EAST:
-            x += V * timestep / 1000
-        else:
-            x -= V * timestep / 1000
+        cell, x, y = move(x, y, front, sweepDirection)
 
-        distanceTraveled = (time - initTime) / 1000 * V
-
-    if distanceTraveled >= 12:
-        if not cell == 4 or not cell == 16:
-            if sweepDirection == EAST:
-                cell += 1
-            else:
-                cell -= 1
-        else:
-            hasHitEastWall = True
-    else:
-        correctDistance(5)
-
-        if not hasHitEastWall:
-            hasHitEastWall = True
-            x = 15
-
-            if travelDirection == NORTH:
-                cell = 4
-            else:
-                cell = 16
-        else:
-            x = -15
-            if travelDirection == NORTH:
-                cell = 1
-            else:
-                cell = 13
+        front = getSensors()[0]
 
     cells[cell - 1] = True
+    printData(cell, x, y, getYawRadians())
+
+    if cell == 4 or cell == 16:
+        hasReachedEastWall = True
+
+        correctDistance(3.5)
+        if sweepDirection == EAST:
+            x = 15
+        else:
+            x = -15
 
     if travelDirection == NORTH:
         travelDirection = SOUTH
@@ -397,8 +393,5 @@ while not isAllCellsCovered(cells) and time < 3 * 60 * 1000:
         travelDirection = NORTH
 
     correctDirection(travelDirection)
-    yaw = getYawRadians()
-
-    printData(cell, x, y, yaw)
 
 setSpeedsRPS(0, 0)
