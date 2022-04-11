@@ -308,7 +308,10 @@ while not isAllCellsCovered(cells):
         robot.step(timestep)
         time += timestep
 
-        y += V * timestep / 1000
+        if travelDirection == NORTH:
+            y += V * timestep / 1000
+        else:
+            y -= V * timestep / 1000
 
         distanceTraveled = (time - initTime) / 1000 * V
 
@@ -325,7 +328,10 @@ while not isAllCellsCovered(cells):
             printData(cell, x, y, yaw)
 
     correctDistance(5)
-    y = 15
+    if travelDirection == NORTH:
+        y = 15
+    else:
+        y = -15
 
     if hasHitEastWall:
         sweepDirection = WEST
@@ -344,7 +350,10 @@ while not isAllCellsCovered(cells):
         robot.step(timestep)
         time += timestep
 
-        x += V * timestep / 1000
+        if sweepDirection == EAST:
+            x += V * timestep / 1000
+        else:
+            x -= V * timestep / 1000
 
         distanceTraveled = (time - initTime) / 1000 * V
 
@@ -354,17 +363,21 @@ while not isAllCellsCovered(cells):
                 cell += 1
             else:
                 cell -= 1
+        else:
+            hasHitEastWall = True
     else:
         correctDistance(5)
 
         if not hasHitEastWall:
             hasHitEastWall = True
+            x = 15
 
             if travelDirection == NORTH:
                 cell = 4
             else:
                 cell = 16
         else:
+            x = -15
             if travelDirection == NORTH:
                 cell = 1
             else:
@@ -373,10 +386,8 @@ while not isAllCellsCovered(cells):
     cells[cell - 1] = True
 
     if travelDirection == NORTH:
-        x = 15
         travelDirection = SOUTH
     else:
-        x = -15
         travelDirection = NORTH
 
     correctDirection(travelDirection)
