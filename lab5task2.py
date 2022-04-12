@@ -7,7 +7,7 @@ import random
 WHEEL_DIST = 1.05
 WHEEL_DIAMETER = 1.6
 MAX_PHI = 2.5
-MAX_SIMULATION_TIME = 30 * 1000
+MAX_SIMULATION_TIME = 30 * 60 * 1000
 MAX_MEASURED_DISTANCE = 1.27
 ACCEPTED_ERROR = 0.001
 K = 10
@@ -20,23 +20,33 @@ EAST = 0
 DIRECTIONS = [WEST, NORTH, EAST, SOUTH]
 
 # map of labyrinth
-labyrinth = [(True, True, False, True),    # 01
-             (False, True, False, True),   # 02
+labyrinth = [(True, True, False, True),  # 01
+             (False, True, False, True),  # 02
              (False, True, False, False),  # 03
-             (False, True, True, False),   # 04
-             (True, True, False, False),   # 05
-             (False, True, True, False),   # 06
-             (True, False, True, False),   # 07
-             (True, False, True, False),   # 08
-             (True, False, True, False),   # 09
-             (True, False, False, True),   # 10
-             (False, False, True, True),   # 11
-             (True, False, True, False),   # 12
-             (True, False, False, True),   # 13
-             (False, True, False, True),   # 14
-             (False, True, False, True),   # 15
-             (False, False, True, True)    # 16
+             (False, True, True, False),  # 04
+             (True, True, False, False),  # 05
+             (False, True, True, False),  # 06
+             (True, False, True, False),  # 07
+             (True, False, True, False),  # 08
+             (True, False, True, False),  # 09
+             (True, False, False, True),  # 10
+             (False, False, True, True),  # 11
+             (True, False, True, False),  # 12
+             (True, False, False, True),  # 13
+             (False, True, False, True),  # 14
+             (False, True, False, True),  # 15
+             (False, False, True, True)  # 16
              ]
+
+X = [-15, -5, 5, 15,
+     -15, -5, 5, 15,
+     -15, -5, 5, 15,
+     -15, -5, 5, 15]
+
+Y = [15, 15, 15, 15,
+     5, 5, 5, 5, 5,
+     -5, -5, -5, -5,
+     -15, -15, -15, -15]
 
 # init cell matrix
 cells = [False] * 16
@@ -155,6 +165,19 @@ def getWalls():
     return walls
 
 
+def getNewPosition(direction, position):
+    if direction == WEST:
+        position -= 1
+    elif direction == NORTH:
+        position -= 4
+    elif direction == EAST:
+        position += 1
+    elif direction == SOUTH:
+        position += 4
+
+    return position
+
+
 def canReachCell(previousCell, cell, movement):
     testCell = -1
 
@@ -180,19 +203,16 @@ def getPossiblePositions(movementList):
     previousPositionList = []
 
     for movement in range(len(movementList)):
-        possiblePositionsMap = [False] * 16
         possiblePositionsList = []
-        for i in range(len(labyrinth)):
-            if movementList[movement][0] == labyrinth[i]:
+        for position in range(len(labyrinth)):
+            if movementList[movement][0] == labyrinth[position]:
                 if movementList[movement][1] is None:
-                    possiblePositionsMap[i] = True
-                    possiblePositionsList.append(i)
+                    possiblePositionsList.append(position)
 
                 else:
-                    for j in previousPositionList:
-                        if canReachCell(j, i, movementList[movement][1]):
-                            possiblePositionsMap[i] = True
-                            possiblePositionsList.append(i)
+                    for previousPosition in previousPositionList:
+                        if canReachCell(previousPosition, position, movementList[movement][1]):
+                            possiblePositionsList.append(position)
 
         previousPositionList = possiblePositionsList
 
@@ -200,7 +220,7 @@ def getPossiblePositions(movementList):
 
 
 def canMove(direction, walls):
-    if direction == None:
+    if direction is None:
         return True
     elif direction == WEST:
         return not walls[0]
@@ -210,6 +230,17 @@ def canMove(direction, walls):
         return not walls[2]
     else:
         return not walls[3]
+
+
+def getReverseDirection(direction):
+    if direction == WEST:
+        return EAST
+    elif direction == NORTH:
+        return SOUTH
+    elif direction == EAST:
+        return WEST
+    else:
+        return NORTH
 
 
 def printData(map, cell, x, y, yaw):
@@ -222,7 +253,7 @@ def printData(map, cell, x, y, yaw):
             print(".", end="")
         if (i + 1) % 4 == 0 and not i == 0:
             print("")
-    print("({0:.2f}, {1:.2f}, {2}, {3:.2f})".format(x, y, cell, yaw))
+    print("({0:.2f}, {1:.2f}, {2}, {3:.2f})".format(x, y, cell + 1, yaw))
 
 
 def randomChooseDirection(walls):
@@ -233,6 +264,12 @@ def randomChooseDirection(walls):
             directions.append(DIRECTIONS[i])
 
     return random.choice(directions)
+
+
+def chooseFirstPossibleDirection(walls):
+    for i in range(len(DIRECTIONS)):
+        if canMove(DIRECTIONS[i], walls):
+            return DIRECTIONS[i]
 
 
 def move1Cell():
@@ -253,6 +290,14 @@ def move1Cell():
         distanceTraveled += abs(frontPrevious - front)
 
 
+# verify if all cells have been marked as traversed
+def isAllCellsCovered(cells):
+    for i in cells:
+        if i == False:
+            return i
+    return True
+
+
 def findPosition():
     movementList = []
     direction = None
@@ -267,7 +312,9 @@ def findPosition():
         if len(positionsList) == 1:
             return positionsList[0]
 
-        direction = randomChooseDirection(walls)
+        newDirection = randomChooseDirection(walls)
+
+        direction = newDirection
 
         correctDirection(direction)
 
@@ -278,8 +325,44 @@ def findPosition():
 robot.step(timestep)
 time += timestep
 
-a = findPosition()
+position = findPosition()
+cells[position] = True
 
-print(a)
+direction = randomChooseDirection(labyrinth[position])
 
-a = 1
+printData(cells, position, X[position], Y[position], getYawRadians())
+
+# execute until map is covered or 3 minutes
+while not isAllCellsCovered(cells) and time < MAX_SIMULATION_TIME:
+    traverse = False
+
+    if position == 2 and cells[1] == False:
+        newDirection = WEST
+        traverse = True
+    else:
+        newDirection = randomChooseDirection(labyrinth[position])
+
+        newPosition = getNewPosition(newDirection, position)
+
+        # Do not allow return
+        if not cells[newPosition]:
+            traverse = True
+        # unless is in position 0
+        elif position == 0:
+            traverse = True
+        # or position 1 coming back for position 2 after going for position 0
+        elif position == 1 and newPosition == 2 and cells[0]:
+            traverse = True
+
+    if traverse:
+        direction = newDirection
+
+        correctDirection(direction)
+
+        move1Cell()
+
+        position = getNewPosition(direction, position)
+
+        cells[position] = True
+
+        printData(cells, position, X[position], Y[position], getYawRadians())
