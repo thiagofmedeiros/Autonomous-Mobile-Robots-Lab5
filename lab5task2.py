@@ -151,6 +151,7 @@ def correctDirection(desiredDirection):
         error = getYawRadians() - desiredDirection
 
 
+# rotates the robot to measure the walls around it
 def getWalls():
     MAX_DISTANCE_WALL = 7
 
@@ -165,6 +166,7 @@ def getWalls():
     return walls
 
 
+# returns the next position given a current location and the movement direction
 def getNewPosition(direction, position):
     if direction == WEST:
         position -= 1
@@ -178,47 +180,74 @@ def getNewPosition(direction, position):
     return position
 
 
-def canReachCell(previousCell, cell, movement):
+# calculates if a cell can be reached given a previous cell and a given movement direction
+def canReachCell(previousCell, cell, direction):
     testCell = -1
 
-    if movement is None:
+    # if the robot did not move, return true
+    if direction is None:
         return True
 
-    elif movement == WEST:
+    elif direction == WEST:
         testCell = cell + 1
-    elif movement == NORTH:
+    elif direction == NORTH:
         testCell = cell + 4
-    elif movement == EAST:
+    elif direction == EAST:
         testCell = cell - 1
-    elif movement == SOUTH:
+    elif direction == SOUTH:
         testCell = cell - 4
+
     if previousCell == testCell:
         return True
 
     return False
 
 
+# given a list of movements (position, directionToBeMoved)
+# returns the possible locations for teh robot
 def getPossiblePositions(movementList):
     possiblePositionsList = []
     previousPositionList = []
 
+    # iterates through movements
     for movement in range(len(movementList)):
         possiblePositionsList = []
-        for position in range(len(labyrinth)):
-            if movementList[movement][0] == labyrinth[position]:
-                if movementList[movement][1] is None:
-                    possiblePositionsList.append(position)
 
+        possibleCell = movementList[movement][0]
+        direction = movementList[movement][1]
+
+        # iterates through all cell in the labyrinth
+        # to verify if there are any possible positions
+        for cell in range(len(labyrinth)):
+
+            # verify if possible cell has the same wall configuration
+            if possibleCell == labyrinth[cell]:
+
+                # if robot has not moved
+                if direction is None:
+                    # add cell to possible positions list
+                    possiblePositionsList.append(cell)
+
+                # if robot moved
                 else:
-                    for previousPosition in previousPositionList:
-                        if canReachCell(previousPosition, position, movementList[movement][1]):
-                            possiblePositionsList.append(position)
 
+                    # from each previous possible position
+                    for previousPosition in previousPositionList:
+
+                        # verify which previous cell could lead to this possible position
+                        if canReachCell(previousPosition, cell, direction):
+                            # add cell to possible positions list
+                            possiblePositionsList.append(cell)
+
+        # stores new possible positions list
+        # to use it against next round of movement
         previousPositionList = possiblePositionsList
 
     return possiblePositionsList
 
 
+# verify if there is no wall blocking
+# movement in desired direction
 def canMove(direction, walls):
     if direction is None:
         return True
@@ -232,18 +261,8 @@ def canMove(direction, walls):
         return not walls[3]
 
 
-def getReverseDirection(direction):
-    if direction == WEST:
-        return EAST
-    elif direction == NORTH:
-        return SOUTH
-    elif direction == EAST:
-        return WEST
-    else:
-        return NORTH
-
-
-def printData(map, cell, x, y, yaw):
+# Print data from pose
+def printData(map, cell):
     # print("Cell {0}".format(cell))
     # print("Position: ({0:.2f}, {1:.2f}) Yaw: {2:.2f})".format(x, y, yaw))
     for i in range(16):
@@ -253,9 +272,11 @@ def printData(map, cell, x, y, yaw):
             print(".", end="")
         if (i + 1) % 4 == 0 and not i == 0:
             print("")
-    print("({0:.2f}, {1:.2f}, {2}, {3:.2f})".format(x, y, cell + 1, yaw))
+    print("({0:.2f}, {1:.2f}, {2}, {3:.2f})".format(X[cell], Y[cell], cell + 1, getYawRadians()))
 
 
+# randomly choose direction
+# from possible movements
 def randomChooseDirection(walls):
     directions = []
 
@@ -266,12 +287,8 @@ def randomChooseDirection(walls):
     return random.choice(directions)
 
 
-def chooseFirstPossibleDirection(walls):
-    for i in range(len(DIRECTIONS)):
-        if canMove(DIRECTIONS[i], walls):
-            return DIRECTIONS[i]
-
-
+# move robot 1 cell or
+# up to the middle of the sema cell
 def move1Cell():
     global time
     distanceTraveled = 0
@@ -291,13 +308,15 @@ def move1Cell():
 
 
 # verify if all cells have been marked as traversed
-def isAllCellsCovered(cells):
-    for i in cells:
+def isAllCellsCovered(map):
+    for i in map:
         if i == False:
             return i
     return True
 
 
+# move robot until it can calculate
+# the cell that it is located
 def findPosition():
     movementList = []
     direction = None
@@ -309,15 +328,13 @@ def findPosition():
 
         positionsList = getPossiblePositions(movementList)
 
+        # return position when there is only one possible position
         if len(positionsList) == 1:
             return positionsList[0]
 
-        newDirection = randomChooseDirection(walls)
-
-        direction = newDirection
-
+        # randomly choose next cell to move
+        direction = randomChooseDirection(walls)
         correctDirection(direction)
-
         move1Cell()
 
 
@@ -330,13 +347,14 @@ cells[position] = True
 
 direction = randomChooseDirection(labyrinth[position])
 
-printData(cells, position, X[position], Y[position], getYawRadians())
+printData(cells, position)
 
 # execute until map is covered or 3 minutes
 while not isAllCellsCovered(cells) and time < MAX_SIMULATION_TIME:
     traverse = False
 
-    if position == 2 and cells[1] == False:
+    # Ensure 0 and 1 are traversed
+    if position == 2 and not cells[1]:
         newDirection = WEST
         traverse = True
     else:
@@ -365,4 +383,6 @@ while not isAllCellsCovered(cells) and time < MAX_SIMULATION_TIME:
 
         cells[position] = True
 
-        printData(cells, position, X[position], Y[position], getYawRadians())
+        printData(cells, position)
+
+setSpeedsRPS(0, 0)
